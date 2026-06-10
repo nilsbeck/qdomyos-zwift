@@ -257,12 +257,69 @@ ApplicationWindow {
         id: toast
     }
 
+    property bool lapPromptVisible: false
+    property string lapPromptText: ""
+
+    function isLapPromptMessage(message) {
+        var lowerMessage = message.toLowerCase()
+        return (lowerMessage.indexOf("press") >= 0 && lowerMessage.indexOf("lap") >= 0) ||
+               (lowerMessage.indexOf("lap") >= 0 && lowerMessage.indexOf("continue") >= 0 &&
+                lowerMessage.indexOf("received") < 0)
+    }
+
+    Rectangle {
+        id: lapPromptOverlay
+        z: Infinity
+        visible: window.lapPromptVisible
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 32, 520)
+        height: Math.max(96, lapPromptLabel.implicitHeight + 44)
+        radius: 8
+        color: "#9C27B0"
+        border.color: "white"
+        border.width: 3
+        opacity: visible ? 1 : 0
+
+        Label {
+            id: lapPromptLabel
+            anchors.fill: parent
+            anchors.margins: 16
+            text: window.lapPromptText
+            color: "white"
+            font.bold: true
+            font.pixelSize: 26
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.WordWrap
+        }
+
+        SequentialAnimation on scale {
+            running: lapPromptOverlay.visible
+            loops: Animation.Infinite
+            NumberAnimation { from: 1.0; to: 1.05; duration: 450; easing.type: Easing.InOutQuad }
+            NumberAnimation { from: 1.05; to: 1.0; duration: 450; easing.type: Easing.InOutQuad }
+        }
+    }
+
+    Timer {
+        id: lapPromptAutoClose
+        interval: 15000
+        repeat: false
+        onTriggered: window.lapPromptVisible = false
+    }
+
     Timer {
         interval: 1
         repeat: false
         running: (rootItem.toastRequested !== "")
         onTriggered: {
-            toast.show(rootItem.toastRequested);
+            if (window.isLapPromptMessage(rootItem.toastRequested)) {
+                window.lapPromptText = rootItem.toastRequested;
+                window.lapPromptVisible = true;
+                lapPromptAutoClose.restart();
+            } else {
+                toast.show(rootItem.toastRequested);
+            }
             rootItem.toastRequested = "";
         }
     }
@@ -760,6 +817,15 @@ ApplicationWindow {
         onYesClicked: rootItem.clipboard_delete_finished_workout()
         onNoClicked: rootItem.clipboard_keep_finished_workout()
         visible: rootItem.clipboardWorkoutDeletePromptRequested
+    }
+
+    MessageDialog {
+        text: "Garmin FTP Update"
+        informativeText: rootItem.garminFtpPromptMessage
+        buttons: (MessageDialog.Yes | MessageDialog.No)
+        onYesClicked: { rootItem.garmin_accept_ftp_update(); }
+        onNoClicked: { rootItem.garmin_dismiss_ftp_update(); }
+        visible: rootItem.garminFtpPromptRequested
     }
 
     MessageDialog {

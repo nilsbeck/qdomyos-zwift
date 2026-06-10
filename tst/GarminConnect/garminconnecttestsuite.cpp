@@ -1,9 +1,11 @@
 #include "garminconnecttestsuite.h"
 #include "garminconnect.h"
+#include "qzsettings.h"
 #include <QDate>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSettings>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QString>
@@ -422,4 +424,192 @@ void GarminConnectTestSuite::test_workoutFileName_sanitizesUnsafeCharacters()
     EXPECT_FALSE(fileName.contains("/"));
     EXPECT_FALSE(fileName.contains("*"));
     EXPECT_FALSE(fileName.contains("?"));
+}
+
+void GarminConnectTestSuite::test_workoutDetailsJson_zoneNumberTargetsSerialize()
+{
+    static const char *kWorkoutJson = R"json({
+        "workoutName": "Zone 2 Aerobic",
+        "sportType": {"sportTypeKey": "cycling"},
+        "workoutSegments": [{
+            "workoutSteps": [{
+                "endCondition": {"conditionTypeKey": "time"},
+                "endConditionValue": 900,
+                "targetType": {"workoutTargetTypeKey": "power.zone"},
+                "targetValueOne": null,
+                "targetValueTwo": null,
+                "zoneNumber": 1,
+                "type": "ExecutableStepDTO"
+            },{
+                "endCondition": {"conditionTypeKey": "lap.button"},
+                "endConditionValue": 1200,
+                "targetType": {"workoutTargetTypeKey": "power.zone"},
+                "targetValueOne": null,
+                "targetValueTwo": null,
+                "zoneNumber": 1,
+                "type": "ExecutableStepDTO"
+            },{
+                "endCondition": {"conditionTypeKey": "time"},
+                "endConditionValue": 13500,
+                "targetType": {"workoutTargetTypeKey": "heart.rate.zone"},
+                "targetValueOne": null,
+                "targetValueTwo": null,
+                "zoneNumber": 2,
+                "type": "ExecutableStepDTO"
+            }]
+        }]
+    })json";
+
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(kWorkoutJson));
+    ASSERT_TRUE(doc.isObject()) << "Workout JSON fixture must be valid";
+
+    const QString xml = garminConnectGenerateWorkoutXml(doc.object());
+
+    EXPECT_EQ(xml.count("<row "), 3) << "Expected exactly 3 rows from 3 workout steps. XML was:\n"
+                                     << xml.toStdString();
+    EXPECT_GE(xml.count("power=\""), 2)
+        << "Expected Garmin power.zone zoneNumber targets to become QZ power targets. XML was:\n"
+        << xml.toStdString();
+    EXPECT_TRUE(xml.contains("lapbutton=\"1\""))
+        << "Expected lap-button row to stay explicit. XML was:\n"
+        << xml.toStdString();
+    EXPECT_TRUE(xml.contains("duration=\"03:45:00\" zonehr=\"2\""))
+        << "Expected Garmin heart.rate.zone zoneNumber target to become QZ HR zone target. XML was:\n"
+        << xml.toStdString();
+}
+
+void GarminConnectTestSuite::test_workoutDetailsJson_lapButtonStepWaitsForLap()
+{
+    static const char *kWorkoutJson = R"json({
+        "workoutName": "Breakaways",
+        "sportType": {"sportTypeKey": "cycling"},
+        "workoutSegments": [{
+            "workoutSteps": [{
+                "description": "Press the lap key when you are ready to start.",
+                "endCondition": {"conditionTypeKey": "lap.button"},
+                "endConditionValue": null,
+                "targetType": {"workoutTargetTypeKey": "power.zone"},
+                "targetValueOne": 110,
+                "targetValueTwo": 150,
+                "type": "ExecutableStepDTO"
+            }]
+        }]
+    })json";
+
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(kWorkoutJson));
+    ASSERT_TRUE(doc.isObject()) << "Workout JSON fixture must be valid";
+
+    const QString xml = garminConnectGenerateWorkoutXml(doc.object());
+
+    EXPECT_EQ(xml.count("<row "), 1) << "Expected exactly 1 row from 1 workout step. XML was:\n"
+                                     << xml.toStdString();
+    EXPECT_TRUE(xml.contains("lapbutton=\"1\""))
+        << "Expected lap-button end condition to be preserved. XML was:\n"
+        << xml.toStdString();
+    EXPECT_TRUE(xml.contains("power=\"130\""))
+        << "Expected power target to remain active while waiting for lap. XML was:\n"
+        << xml.toStdString();
+    EXPECT_TRUE(xml.contains("<textevent timeoffset=\"0\" message=\"Press the lap key when you are ready to start.\"/>"))
+        << "Expected Garmin lap-button prompt to be serialized as a text event. XML was:\n"
+        << xml.toStdString();
+    EXPECT_FALSE(xml.contains("duration=\""))
+        << "Lap-button rows should not get a fake duration. XML was:\n"
+        << xml.toStdString();
+}
+
+void GarminConnectTestSuite::test_workoutDetailsJson_heartRateThresholdEndConditionsSerialize()
+{
+    static const char *kWorkoutJson = R"json({
+        "workoutName": "HR Threshold Gate",
+        "sportType": {"sportTypeKey": "cycling"},
+        "workoutSegments": [{
+            "workoutSteps": [{
+                "endCondition": {"conditionTypeKey": "heart.rate.above"},
+                "endConditionValue": 155,
+                "targetType": {"workoutTargetTypeKey": "power.zone"},
+                "targetValueOne": 180,
+                "targetValueTwo": 210,
+                "type": "ExecutableStepDTO"
+            },{
+                "endCondition": {"conditionTypeKey": "heart.rate"},
+                "endConditionCompare": "lt",
+                "endConditionValue": 122,
+                "targetType": {"workoutTargetTypeKey": "power.zone"},
+                "targetValueOne": 70,
+                "targetValueTwo": 90,
+                "type": "ExecutableStepDTO"
+            },{
+                "endCondition": {"conditionTypeKey": "heart.rate"},
+                "endConditionCompare": "gt",
+                "endConditionValue": 130,
+                "targetType": {"workoutTargetTypeKey": "power.zone"},
+                "zoneNumber": 1,
+                "type": "ExecutableStepDTO"
+            }]
+        }]
+    })json";
+
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(kWorkoutJson));
+    ASSERT_TRUE(doc.isObject()) << "Workout JSON fixture must be valid";
+
+    const QString xml = garminConnectGenerateWorkoutXml(doc.object());
+
+    EXPECT_EQ(xml.count("<row "), 3) << "Expected exactly 3 rows from 3 workout steps. XML was:\n"
+                                     << xml.toStdString();
+    EXPECT_TRUE(xml.contains("hrabove=\"155\""))
+        << "Expected Garmin Above bpm end condition to become a QZ HR-above gate. XML was:\n"
+        << xml.toStdString();
+    EXPECT_TRUE(xml.contains("hrbelow=\"122\""))
+        << "Expected Garmin lt bpm end condition to become a QZ HR-below gate. XML was:\n"
+        << xml.toStdString();
+    EXPECT_TRUE(xml.contains("hrabove=\"130\""))
+        << "Expected Garmin gt bpm end condition to become a QZ HR-above gate. XML was:\n"
+        << xml.toStdString();
+    EXPECT_FALSE(xml.contains("duration=\""))
+        << "Heart-rate threshold rows should not get a fake duration. XML was:\n"
+        << xml.toStdString();
+}
+
+void GarminConnectTestSuite::test_workoutDetailsJson_powerCurveTargetsSerialize()
+{
+    static const char *kWorkoutJson = R"json({
+        "workoutName": "Power Curve Gate",
+        "sportType": {"sportTypeKey": "cycling"},
+        "workoutSegments": [{
+            "workoutSteps": [{
+                "endCondition": {"conditionTypeKey": "time"},
+                "endConditionValue": 300,
+                "powerCurveDuration": 1200,
+                "powerCurveScale": 90,
+                "targetType": {"workoutTargetTypeKey": "power.curve"},
+                "type": "ExecutableStepDTO"
+            }]
+        }]
+    })json";
+
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(kWorkoutJson));
+    ASSERT_TRUE(doc.isObject()) << "Workout JSON fixture must be valid";
+
+    QMap<int, double> powerCurve;
+    powerCurve.insert(1200, 194.4);
+    const QString xml = garminConnectGenerateWorkoutXml(doc.object(), powerCurve);
+    EXPECT_TRUE(xml.contains("<row duration=\"00:05:00\" power=\"175\"/>"))
+        << "Expected 90% of the downloaded 20-minute power curve. XML was:\n"
+        << xml.toStdString();
+
+    QSettings settings;
+    const QVariant oldFtp = settings.value(QZSettings::ftp);
+    const bool hadOldFtp = settings.contains(QZSettings::ftp);
+    settings.setValue(QZSettings::ftp, 200.0);
+
+    const QString fallbackXml = garminConnectGenerateWorkoutXml(doc.object());
+    EXPECT_TRUE(fallbackXml.contains("<row duration=\"00:05:00\" power=\"180\"/>"))
+        << "Expected 90% FTP fallback when the power curve is unavailable. XML was:\n"
+        << fallbackXml.toStdString();
+
+    if (hadOldFtp) {
+        settings.setValue(QZSettings::ftp, oldFtp);
+    } else {
+        settings.remove(QZSettings::ftp);
+    }
 }

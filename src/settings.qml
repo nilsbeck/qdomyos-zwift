@@ -5,6 +5,7 @@ import QtQuick.Controls.Material 2.0
 import Qt.labs.settings 1.0
 import QtQuick.Dialogs 1.0
 import Qt.labs.platform 1.1
+import AndroidStatusBar 1.0
 
 //Page {
     ScrollView {
@@ -13,6 +14,10 @@ import Qt.labs.platform 1.1
         focus: true
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.fill: parent
+        anchors.leftMargin: (Qt.platform.os === "android" && AndroidStatusBar.hasWaterfallDisplay) ?
+                            AndroidStatusBar.waterfallLeftInset : 0
+        anchors.rightMargin: (Qt.platform.os === "android" && AndroidStatusBar.hasWaterfallDisplay) ?
+                             AndroidStatusBar.waterfallRightInset : 0
         //anchors.bottom: footerSettings.top
         //anchors.bottomMargin: footerSettings.height + 10
         id: settingsPane
@@ -1694,6 +1699,8 @@ import Qt.labs.platform 1.1
             property real trainprogram_warmup_speed: 420
             property real trainprogram_cooldown_speed: 420
             property real trainprogram_rest_speed: 420
+            property string garmin_last_seen_cycling_ftp_create_time: ""
+            property string garmin_last_seen_running_ftp_create_time: ""
         }
 
 

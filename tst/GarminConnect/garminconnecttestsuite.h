@@ -123,6 +123,35 @@ public:
      * @brief Test calendar workout filenames are sanitized.
      */
     void test_workoutFileName_sanitizesUnsafeCharacters();
+
+    /**
+     * @brief Test Garmin zoneNumber-only power/HR targets from training plans.
+     *
+     * Verifies Garmin power.zone/heart.rate.zone payloads that provide zoneNumber
+     * without numeric target bounds still serialize as QZ workout targets.
+     */
+    void test_workoutDetailsJson_zoneNumberTargetsSerialize();
+
+    /**
+     * @brief Test Garmin lap-button steps from training plans.
+     *
+     * Verifies that endCondition "lap.button" is serialized as an explicit wait-for-lap row.
+     */
+    void test_workoutDetailsJson_lapButtonStepWaitsForLap();
+
+    /**
+     * @brief Test Garmin heart-rate threshold end conditions.
+     *
+     * Verifies Above/Below bpm steps are serialized as blocking QZ workout rows.
+     */
+    void test_workoutDetailsJson_heartRateThresholdEndConditionsSerialize();
+
+    /**
+     * @brief Test Garmin power-curve targets.
+     *
+     * Verifies power.curve steps use downloaded curve data, with FTP as fallback.
+     */
+    void test_workoutDetailsJson_powerCurveTargetsSerialize();
 };
 
 // Register individual tests with Google Test
@@ -176,6 +205,22 @@ TEST_F(GarminConnectTestSuite, WorkoutFileNameAppendsSportSuffix) {
 
 TEST_F(GarminConnectTestSuite, WorkoutFileNameSanitizesUnsafeCharacters) {
     this->test_workoutFileName_sanitizesUnsafeCharacters();
+}
+
+TEST_F(GarminConnectTestSuite, WorkoutDetailsJsonZoneNumberTargetsSerialize) {
+    this->test_workoutDetailsJson_zoneNumberTargetsSerialize();
+}
+
+TEST_F(GarminConnectTestSuite, WorkoutDetailsJsonLapButtonStepWaitsForLap) {
+    this->test_workoutDetailsJson_lapButtonStepWaitsForLap();
+}
+
+TEST_F(GarminConnectTestSuite, WorkoutDetailsJsonHeartRateThresholdEndConditionsSerialize) {
+    this->test_workoutDetailsJson_heartRateThresholdEndConditionsSerialize();
+}
+
+TEST_F(GarminConnectTestSuite, WorkoutDetailsJsonPowerCurveTargetsSerialize) {
+    this->test_workoutDetailsJson_powerCurveTargetsSerialize();
 }
 
 #endif // GARMINCONNECTTESTSUITE_H
