@@ -626,9 +626,11 @@ homeform::homeform(QQmlApplicationEngine *engine, bluetooth *bl) {
 #if defined(Q_OS_WIN) || (defined(Q_OS_MAC) && !defined(Q_OS_IOS)) || (defined(Q_OS_ANDROID) && defined(LICENSE))
 #ifndef STEAM_STORE
     connect(engine, &QQmlApplicationEngine::quit, &QGuiApplication::quit);
-    connect(&tLicense, &QTimer::timeout, this, &homeform::licenseTimeout);
-    tLicense.start(600000);
-    licenseRequest();
+    // Trial/Patreon limitation disabled: never start the license timer so the
+    // "Trial time expired" popup can never be triggered.
+    // connect(&tLicense, &QTimer::timeout, this, &homeform::licenseTimeout);
+    // tLicense.start(600000);
+    // licenseRequest();
 #endif
 #endif
 
@@ -10247,7 +10249,7 @@ void homeform::licenseRequest() {
     });
 }
 
-void homeform::licenseTimeout() { setLicensePopupVisible(true); }
+void homeform::licenseTimeout() { /* Trial/Patreon limitation disabled: do not show the license popup. */ }
 #endif
 
 void homeform::changeTimestamp(QTime source, QTime actual) {
