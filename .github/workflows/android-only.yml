@@ -224,18 +224,26 @@ jobs:
         run: |
           set -x
           OUT="${{ github.workspace }}/output/android"
+          # The project's AndroidX deps (health-connect, activity) require compileSdk >= 35,
+          # and src/android/build.gradle intends 35 (androidCompileSdkVersion + suppressUnsupportedCompileSdk).
+          # Make sure that platform is installed for the gradle compile.
+          SDKMANAGER=$(find /usr/local/lib/android/sdk/cmdline-tools -name sdkmanager 2>/dev/null | sort | tail -1)
+          yes | "$SDKMANAGER" "platforms;android-35" || true
           # androiddeployqt generates the gradle project AND runs gradle in one shot.
-          # Qt 5.15.0 unconditionally writes android.bundle.enableUncompressedNativeLibs
-          # into gradle.properties, which AGP 8.1+ (8.13 is pinned in src/android/build.gradle)
-          # removed -> "apply plugin: com.android.application" fails. The project's build.gradle
-          # already uses the modern replacement (packaging { jniLibs { useLegacyPackaging = true }}).
-          # So: let androiddeployqt generate everything (its final gradle step may fail), then strip
-          # the dead property and run gradle ourselves to assemble the debug APK.
+          # Two collisions with the AGP 8.13 pinned in src/android/build.gradle:
+          #  1. Qt 5.15.0 unconditionally writes android.bundle.enableUncompressedNativeLibs into
+          #     gradle.properties, removed in AGP 8.1 (project already uses useLegacyPackaging instead).
+          #  2. androiddeployqt overwrites androidCompileSdkVersion with the --android-platform value (31),
+          #     but the AndroidX deps need >= 35.
+          # So: let androiddeployqt generate everything (its final gradle step may fail), patch
+          # gradle.properties, then assemble the debug APK ourselves.
           cd src
-          androiddeployqt --input android-qdomyos-zwift-deployment-settings.json --output "$OUT" --android-platform android-31 --gradle || echo "androiddeployqt gradle step failed (expected on AGP 8.1+); patching and retrying"
+          androiddeployqt --input android-qdomyos-zwift-deployment-settings.json --output "$OUT" --android-platform android-31 --gradle || echo "androiddeployqt gradle step failed (expected); patching and retrying"
           PROPS="$OUT/gradle.properties"
           echo "=== gradle.properties before patch ==="; cat "$PROPS" || true
           sed -i '/android\.bundle\.enableUncompressedNativeLibs/d' "$PROPS"
+          sed -i 's/^androidCompileSdkVersion=.*/androidCompileSdkVersion=35/' "$PROPS"
+          grep -q '^androidCompileSdkVersion=' "$PROPS" || echo 'androidCompileSdkVersion=35' >> "$PROPS"
           echo "=== gradle.properties after patch ==="; cat "$PROPS"
           cd "$OUT"
           chmod +x ./gradlew
