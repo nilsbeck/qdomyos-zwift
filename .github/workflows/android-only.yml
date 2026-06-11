@@ -221,7 +221,26 @@ jobs:
             gradle-android-${{ runner.os }}-
 
       - name: Build APK (not usable for production due to unpatched QT library)
-        run: cd src; androiddeployqt --input android-qdomyos-zwift-deployment-settings.json --output ${{ github.workspace }}/output/android/ --android-platform android-31 --gradle
+        run: |
+          set -x
+          OUT="${{ github.workspace }}/output/android"
+          # androiddeployqt generates the gradle project AND runs gradle in one shot.
+          # Qt 5.15.0 unconditionally writes android.bundle.enableUncompressedNativeLibs
+          # into gradle.properties, which AGP 8.1+ (8.13 is pinned in src/android/build.gradle)
+          # removed -> "apply plugin: com.android.application" fails. The project's build.gradle
+          # already uses the modern replacement (packaging { jniLibs { useLegacyPackaging = true }}).
+          # So: let androiddeployqt generate everything (its final gradle step may fail), then strip
+          # the dead property and run gradle ourselves to assemble the debug APK.
+          cd src
+          androiddeployqt --input android-qdomyos-zwift-deployment-settings.json --output "$OUT" --android-platform android-31 --gradle || echo "androiddeployqt gradle step failed (expected on AGP 8.1+); patching and retrying"
+          PROPS="$OUT/gradle.properties"
+          echo "=== gradle.properties before patch ==="; cat "$PROPS" || true
+          sed -i '/android\.bundle\.enableUncompressedNativeLibs/d' "$PROPS"
+          echo "=== gradle.properties after patch ==="; cat "$PROPS"
+          cd "$OUT"
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleDebug
+          echo "=== produced APKs ==="; find "$OUT/build/outputs/apk" -name "*.apk"
 
       - name: Re-sign APK for stable App Links fingerprint
         run: |
