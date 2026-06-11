@@ -221,7 +221,7 @@ jobs:
             gradle-android-${{ runner.os }}-
 
       - name: Build APK (not usable for production due to unpatched QT library)
-        run: cd src; androiddeployqt --input android-qdomyos-zwift-deployment-settings.json --output ${{ github.workspace }}/output/android/ --android-platform android-31 --gradle --aab
+        run: cd src; androiddeployqt --input android-qdomyos-zwift-deployment-settings.json --output ${{ github.workspace }}/output/android/ --android-platform android-31 --gradle
 
       - name: Re-sign APK for stable App Links fingerprint
         run: |
